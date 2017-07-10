@@ -30,6 +30,11 @@ pub struct F2Dot14(i16);
 /// TODO: This should consist of two 16-bit unsigned integers.
 pub struct FixedVersion(Fixed);
 
+/// An unsigned 64-bit date and time represented in the number of seconds
+/// since midnight, January 1, 1904.
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, From)]
+pub struct LongDateTime(u64);
+
 // Unfortunately byteorder doesn't provide `read_u8` or `read_i8`
 // methods, so we must provide them ourselves.
 
@@ -64,6 +69,7 @@ impl_decode!(
     BigEndian::read_u16 => UFWord,
     BigEndian::read_i16 => F2Dot14,
     BigEndian::read_i32 => Fixed,
+    BigEndian::read_u64 => LongDateTime,
 
     read_u8             => u8,
     read_i8             => i8,
@@ -99,16 +105,24 @@ impl From<F2Dot14> for f32 {
     }
 }
 
-/// An unsigned 64-bit date and time represented in the number of seconds
-/// since midnight, January 1, 1904.
-#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
-pub struct LongDateTime(u64);
-
 /// An array of 4 bytes used to identify scripts, language systems, features,
 /// baselines, and table names.  The bytes are either in Latin-1 or
 /// treated as a 32-bit native endian indentifying integer.
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
-pub struct Tag(u32);
+pub struct Tag(pub(crate) [u8; 4]);
+
+impl<'fnt> Decode<'fnt> for Tag {
+    fn decode(buffer: &'fnt [u8]) -> Result<Tag> {
+        let tag = [
+            buffer[0],
+            buffer[1],
+            buffer[2],
+            buffer[3],
+        ];
+        
+        Ok(Tag(tag))
+    }
+}
 
 /// A 16-bit unsigned integer, representing an offset to a table `T`.
 #[derive(Copy, Clone, PartialEq, Eq)]
