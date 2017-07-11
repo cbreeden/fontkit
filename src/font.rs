@@ -1,5 +1,5 @@
 use primitives::{Tag, Ignored, Array};
-use decode::{StaticEncodeSize, EncodeSize, Decode, DecodeRead, DecodeWithRead};
+use decode::{StaticEncodeSize, Decode, DecodeRead, DecodeWithRead};
 use error::{Error, Result};
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
@@ -24,7 +24,7 @@ impl<'fnt> Decode<'fnt> for Version {
 }
 
 #[derive(Decode, Debug)]
-struct OffsetTable<'fnt> {
+pub struct OffsetTable<'fnt> {
     sfnt_version: Version,
     num_tables: u16,
     search_range: Ignored<u16>,

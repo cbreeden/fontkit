@@ -3,7 +3,7 @@
 //! This module also provides a wrapper around the `byteorder` create,
 //! since every datatype found in fonts are `BigEndian`.
 
-use error::{Error, Result};
+use error::Result;
 
 /// Types whose sizes are statically known should implement this trait.
 /// It's important to note that `size` refers to the encoding size in
@@ -14,7 +14,7 @@ use error::{Error, Result};
 
 pub trait EncodeSize {
     /// The size in bytes of the _decoded_ type.
-    fn size(&self) -> usize;
+    fn encode_size(&self) -> usize;
 }
 
 pub trait StaticEncodeSize {
@@ -22,7 +22,7 @@ pub trait StaticEncodeSize {
 }
 
 impl<T: StaticEncodeSize> EncodeSize for T {
-    fn size(&self) -> usize {
+    fn encode_size(&self) -> usize {
         Self::size()
     }
 }
@@ -39,14 +39,14 @@ pub trait Decode<'fnt>: Sized {
 /// for types that implement `Decode` and `StaticSize` automatically.
 
 pub trait DecodeRead<'fnt>: Sized {
-    fn read<T: Decode<'fnt> + EncodeSize>(&mut self) -> Result<T>;
+    fn decode_read<T: Decode<'fnt> + EncodeSize>(&mut self) -> Result<T>;
 }
 
 impl<'b: 'fnt, 'fnt> DecodeRead<'fnt> for &'b [u8] {
     #[inline]
-    fn read<T: Decode<'fnt> + EncodeSize>(&mut self) -> Result<T> {
+    fn decode_read<T: Decode<'fnt> + EncodeSize>(&mut self) -> Result<T> {
         let ret = T::decode(self)?;
-        *self = &self[ret.size()..];
+        *self = &self[ret.encode_size()..];
         Ok(ret)
     }
 }
@@ -67,16 +67,17 @@ pub trait DecodeWith<'fnt, P>: Sized {
 /// for types that implement `DecodeWith` and `StaticSize` automatically.
 
 pub trait DecodeWithRead<'fnt, P>: Sized {
-    fn read_with<T>(&mut self, param: P) -> Result<T> where T: DecodeWith<'fnt, P> + EncodeSize;
+    fn decode_read_with<T>(&mut self, param: P) -> Result<T>
+        where T: DecodeWith<'fnt, P> + EncodeSize;
 }
 
 impl<'b: 'fnt, 'fnt, P> DecodeWithRead<'fnt, P> for &'b [u8] {
     #[inline]
-    fn read_with<T>(&mut self, param: P) -> Result<T>
+    fn decode_read_with<T>(&mut self, param: P) -> Result<T>
         where T: DecodeWith<'fnt, P> + EncodeSize
     {
         let ret = T::decode_with(self, param)?;
-        *self = &self[ret.size()..];
+        *self = &self[ret.encode_size()..];
         Ok(ret)
     }
 }

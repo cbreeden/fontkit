@@ -5,7 +5,7 @@ use std::marker::PhantomData;
 use std::fmt;
 
 use error::{Error, Result};
-use decode::{Decode, DecodeRead, DecodeWith, DecodeWithRead, EncodeSize, StaticEncodeSize};
+use decode::{Decode, DecodeRead, DecodeWith, EncodeSize, StaticEncodeSize};
 use byteorder::{BigEndian, ByteOrder};
 
 /// A 32-bit signed fixed-point number: 16.16.
@@ -26,8 +26,21 @@ pub struct UFWord(u16);
 #[derive(Debug, Copy, Clone, PartialEq, Eq, From)]
 pub struct F2Dot14(i16);
 
+/// A 24-bit unsigned integer.
+#[derive(Debug, Copy, Clone, PartialEq, Eq, From)]
+pub struct Uint24(u32);
+
+static_size!(Uint24 = 3);
+
+impl<'fnt> Decode<'fnt> for Uint24 {
+    fn decode(buffer: &[u8]) -> Result<Uint24> {
+        required_len!(buffer, Uint24::size());
+        Ok(Uint24(BigEndian::read_u24(buffer)))
+    }
+}
+
 /// A 16.16 version containing a major (16-bit) and minor (16-bit).
-/// TODO: This should consist of two 16-bit unsigned integers.
+//  TODO: This should consist of two 16-bit unsigned integers.
 pub struct FixedVersion(Fixed);
 
 /// An unsigned 64-bit date and time represented in the number of seconds
@@ -57,10 +70,7 @@ macro_rules! impl_decode {
 
             impl<'fnt> Decode<'fnt> for $type {
                 fn decode(buffer: &[u8]) -> Result<$type> {
-                    if buffer.len() < ::std::mem::size_of::<$type>() {
-                        return Err(Error::UnexpectedEof)
-                    }
-
+                    required_len!(buffer, Self::size());
                     Ok($type::from($conv(buffer)))
                 }
             }
@@ -202,6 +212,13 @@ impl<T> fmt::Debug for Ignored<T> {
     }
 }
 
+/// An `Array` data-type which represents a contiguous regoin of encoded `T`.
+/// This type is often used for dynamic array sizes, whose sizes aren't knwon
+/// until they are decoded (often by referencing a length attribute).  As such
+/// `Array` implements `EncodeSize` but not `StaticEncodeSize`.  An `Array` also
+/// requires `T` to have implement `StaticEncodeSize` to properly implement random
+/// access.
+
 #[derive(Copy, Clone)]
 pub struct Array<'fnt, T> {
     buffer: &'fnt [u8],
@@ -227,10 +244,12 @@ impl<'fnt, T> DecodeWith<'fnt, usize> for Array<'fnt, T> {
 }
 
 impl<'fnt, T> EncodeSize for Array<'fnt, T> where T: StaticEncodeSize {
-    fn size(&self) -> usize {
+    fn encode_size(&self) -> usize {
         T::size() * self.len
     }
 }
+
+/// An iterator of type `T` constructed from an `Array<T>`.
 
 pub struct ArrayIter<'fnt, T> {
     buffer: &'fnt [u8],
@@ -251,7 +270,7 @@ where
         }
 
         self.pos += 1;
-        self.buffer.read::<T>().ok()
+        self.buffer.decode_read::<T>().ok()
     }
 }
 
