@@ -1,5 +1,5 @@
-use primitives::Tag;
-use decode::{StaticSize, Decode};
+use primitives::{Tag, Ignored, Array};
+use decode::{StaticEncodeSize, EncodeSize, Decode, DecodeRead, DecodeWithRead};
 use error::{Error, Result};
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
@@ -9,6 +9,7 @@ pub enum Version {
 }
 
 static_size!(Version = 4);
+
 impl<'fnt> Decode<'fnt> for Version {
     fn decode(buffer: &[u8]) -> Result<Version> {
         const VERSION1: [u8; 4] = [0x00, 0x01, 0x00, 0x00];
@@ -20,4 +21,34 @@ impl<'fnt> Decode<'fnt> for Version {
             _ => Err(Error::InvalidData),
         }
     }
+}
+
+#[derive(Decode, Debug)]
+struct OffsetTable<'fnt> {
+    sfnt_version: Version,
+    num_tables: u16,
+    search_range: Ignored<u16>,
+    entry_selector: Ignored<u16>,
+    range_shift: Ignored<u16>,
+    #[WithParam = "num_tables as usize"]
+    tables: Array<'fnt, TableRecord>,
+}
+
+#[derive(Decode, StaticEncodeSize, Debug, PartialEq)]
+pub struct TableRecord {
+    pub tag: Tag,
+    pub check_sum: u32,
+    pub offset: u32,
+    pub length: u32,
+}
+
+#[test]
+fn try() {
+    let data = open_file!("data/DroidSerif.ttf");
+    let font = OffsetTable::decode(&data).expect("failed to read offset table");
+    for tbl in font.tables {
+        println!("{:?}", tbl);
+    }
+
+    panic!();
 }

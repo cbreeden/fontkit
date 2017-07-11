@@ -1,6 +1,8 @@
 #[macro_use]
 extern crate derive_more;
 extern crate byteorder;
+#[macro_use]
+extern crate decode_derive;
 
 #[macro_use]
 mod macros;

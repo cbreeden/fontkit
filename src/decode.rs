@@ -12,9 +12,19 @@ use error::{Error, Result};
 /// has a stack size of 4-bytes, but should implement a
 /// `StaticSize::size() == 4`.
 
-pub trait StaticSize {
+pub trait EncodeSize {
     /// The size in bytes of the _decoded_ type.
+    fn size(&self) -> usize;
+}
+
+pub trait StaticEncodeSize {
     fn size() -> usize;
+}
+
+impl<T: StaticEncodeSize> EncodeSize for T {
+    fn size(&self) -> usize {
+        Self::size()
+    }
 }
 
 /// The `Decode` trait provides the logic for taking a slice of bytes
@@ -29,18 +39,15 @@ pub trait Decode<'fnt>: Sized {
 /// for types that implement `Decode` and `StaticSize` automatically.
 
 pub trait DecodeRead<'fnt>: Sized {
-    fn read<T: Decode<'fnt> + StaticSize>(&mut self) -> Result<T>;
+    fn read<T: Decode<'fnt> + EncodeSize>(&mut self) -> Result<T>;
 }
 
 impl<'b: 'fnt, 'fnt> DecodeRead<'fnt> for &'b [u8] {
-    fn read<T: Decode<'fnt> + StaticSize>(&mut self) -> Result<T> {
-        if self.len() < T::size() {
-            return Err(Error::UnexpectedEof);
-        }
-
-        let ret = T::decode(self);
-        *self = &self[T::size()..];
-        ret
+    #[inline]
+    fn read<T: Decode<'fnt> + EncodeSize>(&mut self) -> Result<T> {
+        let ret = T::decode(self)?;
+        *self = &self[ret.size()..];
+        Ok(ret)
     }
 }
 
@@ -60,19 +67,16 @@ pub trait DecodeWith<'fnt, P>: Sized {
 /// for types that implement `DecodeWith` and `StaticSize` automatically.
 
 pub trait DecodeWithRead<'fnt, P>: Sized {
-    fn read_with<T>(&mut self, param: P) -> Result<T> where T: DecodeWith<'fnt, P> + StaticSize;
+    fn read_with<T>(&mut self, param: P) -> Result<T> where T: DecodeWith<'fnt, P> + EncodeSize;
 }
 
 impl<'b: 'fnt, 'fnt, P> DecodeWithRead<'fnt, P> for &'b [u8] {
+    #[inline]
     fn read_with<T>(&mut self, param: P) -> Result<T>
-        where T: DecodeWith<'fnt, P> + StaticSize
+        where T: DecodeWith<'fnt, P> + EncodeSize
     {
-        if self.len() < T::size() {
-            return Err(Error::UnexpectedEof);
-        }
-
-        let ret = T::decode_with(self, param);
-        *self = &self[T::size()..];
-        ret
+        let ret = T::decode_with(self, param)?;
+        *self = &self[ret.size()..];
+        Ok(ret)
     }
 }

@@ -6,3 +6,4 @@ authors = ["Christopher Breeden <github@u.breeden.cc>"]
 [dependencies]
 derive_more = "*"
 byteorder = "*"
+decode_derive = { path = "decode_derive/" }

@@ -4,8 +4,8 @@
 use std::marker::PhantomData;
 use std::fmt;
 
-use error::Result;
-use decode::{Decode, StaticSize};
+use error::{Error, Result};
+use decode::{Decode, DecodeRead, DecodeWith, DecodeWithRead, EncodeSize, StaticEncodeSize};
 use byteorder::{BigEndian, ByteOrder};
 
 /// A 32-bit signed fixed-point number: 16.16.
@@ -13,12 +13,12 @@ use byteorder::{BigEndian, ByteOrder};
 pub struct Fixed(i32);
 
 /// A signed 16-bit qunatity in font design units.
-#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, 
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd,
          Ord, From, Add, AddAssign, Mul, MulAssign, Not)]
 pub struct FWord(i16);
 
 /// An unisgned 16-bit qunatity in font design units.
-#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, 
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd,
          Ord, From, Add, AddAssign, Mul, MulAssign, Not)]
 pub struct UFWord(u16);
 
@@ -51,12 +51,16 @@ fn read_i8(buffer: &[u8]) -> i8 {
 macro_rules! impl_decode {
     ($($conv:expr => $type:tt),* $(,)*) => (
         $(
-            impl StaticSize for $type {
+            impl StaticEncodeSize for $type {
                 fn size() -> usize { ::std::mem::size_of::<$type>() }
             }
 
             impl<'fnt> Decode<'fnt> for $type {
                 fn decode(buffer: &[u8]) -> Result<$type> {
+                    if buffer.len() < ::std::mem::size_of::<$type>() {
+                        return Err(Error::UnexpectedEof)
+                    }
+
                     Ok($type::from($conv(buffer)))
                 }
             }
@@ -108,8 +112,10 @@ impl From<F2Dot14> for f32 {
 /// An array of 4 bytes used to identify scripts, language systems, features,
 /// baselines, and table names.  The bytes are either in Latin-1 or
 /// treated as a 32-bit native endian indentifying integer.
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Copy, Clone, PartialEq, Eq)]
 pub struct Tag(pub(crate) [u8; 4]);
+
+static_size!(Tag = 4);
 
 impl<'fnt> Decode<'fnt> for Tag {
     fn decode(buffer: &'fnt [u8]) -> Result<Tag> {
@@ -119,8 +125,29 @@ impl<'fnt> Decode<'fnt> for Tag {
             buffer[2],
             buffer[3],
         ];
-        
+
         Ok(Tag(tag))
+    }
+}
+
+impl fmt::Debug for Tag {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        use ::std::str;
+        // Print the ASCII name if the name contains only
+        // visible ASCII characters.  Otherwise Hex.
+        if self.0.iter().all(|&c| c >= 32 && c <= 128) {
+            let s = str::from_utf8(&self.0[..]).unwrap();
+            f.debug_tuple("Tag")
+                .field(&s)
+                .finish()
+        } else {
+            let n = (self.0[0] as u32) << 24
+                | (self.0[1] as u32) << 16
+                | (self.0[2] as u32) << 8
+                | (self.0[3] as u32);
+
+            write!(f, "Tag(0x{:08X})", n)
+        }
     }
 }
 
@@ -152,6 +179,98 @@ impl<'fnt, T> fmt::Debug for Offset32<'fnt, T> {
 
 // TODO: implement a reasonable Debug for `Offset*`.  This shoud look
 //       something like `Offset<Type>`.
+
+/// The `Ignored` type indicates that a type will not
+/// be decoded, and instead skipped over.
+
+#[derive(Copy, Clone, Hash, PartialEq, Eq)]
+pub struct Ignored<T>(PhantomData<T>);
+
+impl<'fnt, T> Decode<'fnt> for Ignored<T> {
+    fn decode(_: &[u8]) -> Result<Self> {
+        Ok(Ignored(PhantomData))
+    }
+}
+
+impl<T> StaticEncodeSize for Ignored<T> where T: StaticEncodeSize {
+    fn size() -> usize { T::size() }
+}
+
+impl<T> fmt::Debug for Ignored<T> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "Ignored")
+    }
+}
+
+#[derive(Copy, Clone)]
+pub struct Array<'fnt, T> {
+    buffer: &'fnt [u8],
+    len: usize,
+    _phantom: PhantomData<T>,
+}
+
+impl<'fnt, T> fmt::Debug for Array<'fnt, T> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "Array")
+    }
+}
+
+
+impl<'fnt, T> DecodeWith<'fnt, usize> for Array<'fnt, T> {
+    fn decode_with(buffer: &'fnt [u8], param: usize) -> Result<Array<'fnt, T>> {
+        Ok(Array {
+            buffer,
+            len: param,
+            _phantom: PhantomData
+        })
+    }
+}
+
+impl<'fnt, T> EncodeSize for Array<'fnt, T> where T: StaticEncodeSize {
+    fn size(&self) -> usize {
+        T::size() * self.len
+    }
+}
+
+pub struct ArrayIter<'fnt, T> {
+    buffer: &'fnt [u8],
+    len: usize,
+    pos: usize,
+    _phantom: PhantomData<T>,
+}
+
+impl<'fnt, T> Iterator for ArrayIter<'fnt, T>
+where
+    T: Decode<'fnt> + StaticEncodeSize
+{
+    type Item = T;
+
+    fn next(&mut self) -> Option<T> {
+        if self.pos >= self.len {
+            return None
+        }
+
+        self.pos += 1;
+        self.buffer.read::<T>().ok()
+    }
+}
+
+impl<'fnt, T> IntoIterator for Array<'fnt, T>
+where
+    T: Decode<'fnt> + StaticEncodeSize
+{
+    type IntoIter = ArrayIter<'fnt, T>;
+    type Item = T;
+
+    fn into_iter(self) -> ArrayIter<'fnt, T> {
+        ArrayIter {
+            buffer: self.buffer,
+            len: self.len,
+            pos: 0,
+            _phantom: PhantomData,
+        }
+    }
+}
 
 #[cfg(test)]
 mod tests {
