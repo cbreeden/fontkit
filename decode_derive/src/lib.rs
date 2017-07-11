@@ -33,6 +33,7 @@ fn impl_parse(ast: &syn::DeriveInput) -> quote::Tokens {
     let fields = variants.iter().map(|field| field.ident.as_ref().unwrap());
     let parse = variants
         .iter()
+        .filter(|field| field.ident.as_ref().unwrap() != "buffer")
         .map(|field| {
             let ident = field.ident.as_ref().unwrap();
             let ty = &field.ty;
@@ -76,7 +77,7 @@ fn impl_parse(ast: &syn::DeriveInput) -> quote::Tokens {
     quote! {
         impl<'fnt> Decode<'fnt> for #ident #ty_generics #where_clause {
             #[inline]
-            fn decode(buffer: &'fnt [u8]) -> Result<#ident #ty_generics> {
+            fn decode(buffer: &'fnt [u8]) -> Result<Self> {
                 let mut buf = buffer;
                 #(#parse)*
 
@@ -109,7 +110,10 @@ fn impl_static_size(ast: &syn::DeriveInput) -> quote::Tokens {
 
     let (impl_generics, ty_generics, where_clause) = ast.generics.split_for_impl();
     let ident = &ast.ident;
-    let tys = variants.iter().map(|field| &field.ty);
+    let tys = variants
+        .iter()
+        .filter(|field| field.ident.as_ref().unwrap() != "buffer")
+        .map(|field| &field.ty);
 
     quote! {
         impl #impl_generics StaticEncodeSize for #ident #ty_generics #where_clause {

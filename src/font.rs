@@ -31,11 +31,12 @@ pub struct OffsetTable<'fnt> {
     entry_selector: Ignored<u16>,
     range_shift: Ignored<u16>,
     #[WithParam = "num_tables as usize"]
-    tables: Array<'fnt, TableRecord>,
+    tables: Array<'fnt, TableRecord<'fnt>>,
 }
 
 #[derive(Decode, StaticEncodeSize, Debug, PartialEq)]
-pub struct TableRecord {
+pub struct TableRecord<'fnt> {
+    buffer: &'fnt [u8],
     pub tag: Tag,
     pub check_sum: u32,
     pub offset: u32,

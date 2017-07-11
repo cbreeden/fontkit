@@ -162,17 +162,55 @@ impl fmt::Debug for Tag {
 }
 
 /// A 16-bit unsigned integer, representing an offset to a table `T`.
+/// This type can only be used when the table is known at compile time.
 #[derive(Copy, Clone, PartialEq, Eq)]
 pub struct Offset16<'fnt, T: 'fnt> {
-    pub(crate) buffer: &'fnt u8,
+    pub(crate) buffer: &'fnt [u8],
     pub(crate) table: PhantomData<T>,
 }
 
 /// A 32-bit unsigned integer, representing an offset to a table `T`.
+/// This type can only be used when the table is known at compile time.
 #[derive(Copy, Clone, PartialEq, Eq)]
 pub struct Offset32<'fnt, T: 'fnt> {
-    pub(crate) buffer: &'fnt u8,
+    pub(crate) buffer: &'fnt [u8],
     pub(crate) table: PhantomData<T>,
+}
+
+impl<'fnt, T> StaticEncodeSize for Offset16<'fnt, T> {
+    fn size() -> usize { 2 }
+}
+
+impl<'fnt, T> StaticEncodeSize for Offset32<'fnt, T> {
+    fn size() -> usize { 4 }
+}
+
+impl<'fnt, T> DecodeWith<'fnt, &'fnt [u8]> for Offset16<'fnt, T> {
+    fn decode_with(buffer: &[u8], parent: &'fnt [u8]) -> Result<Offset16<'fnt, T>> {
+        required_len!(buffer, Self::size());
+        let offset = u16::decode(buffer)? as usize;
+        required_len!(parent, offset);
+        let buf = &parent[offset..];
+
+        Ok(Offset16 {
+            buffer: buf,
+            table: PhantomData
+        })
+    }
+}
+
+impl<'fnt, T> DecodeWith<'fnt, &'fnt [u8]> for Offset32<'fnt, T> {
+    fn decode_with(buffer: &[u8], parent: &'fnt [u8]) -> Result<Offset32<'fnt, T>> {
+        required_len!(buffer, Self::size());
+        let offset = u16::decode(buffer)? as usize;
+        required_len!(parent, offset);
+        let buf = &parent[offset..];
+
+        Ok(Offset32 {
+            buffer: buf,
+            table: PhantomData
+        })
+    }
 }
 
 impl<'fnt, T> fmt::Debug for Offset16<'fnt, T> {
