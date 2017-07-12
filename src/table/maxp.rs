@@ -1,4 +1,4 @@
-use decode::{Decode, StaticEncodeSize, DecodeRead};
+use decode::{Decode, StaticEncodeSize, EncodeSize, DecodeRead};
 use primitives::Fixed;
 use error::{Error, Result};
 
@@ -49,5 +49,5 @@ pub struct Version1 {
     pub max_stack_elements: u16,
     pub max_size_of_instructions: u16,
     pub max_component_elements: u16,
-    pub max_component_depth: u16,    
+    pub max_component_depth: u16,
 }

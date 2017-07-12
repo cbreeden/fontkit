@@ -5,7 +5,7 @@ use std::marker::PhantomData;
 use std::fmt;
 
 use error::{Error, Result};
-use decode::{Decode, DecodeRead, DecodeWith, EncodeSize, StaticEncodeSize};
+use decode::{Decode, DecodeRead, Decode1, EncodeSize, StaticEncodeSize};
 use byteorder::{BigEndian, ByteOrder};
 
 /// A 32-bit signed fixed-point number: 16.16.
@@ -185,8 +185,8 @@ impl<'fnt, T> StaticEncodeSize for Offset32<'fnt, T> {
     fn size() -> usize { 4 }
 }
 
-impl<'fnt, T> DecodeWith<'fnt, &'fnt [u8]> for Offset16<'fnt, T> {
-    fn decode_with(buffer: &[u8], parent: &'fnt [u8]) -> Result<Offset16<'fnt, T>> {
+impl<'fnt, T> Decode1<'fnt, &'fnt [u8]> for Offset16<'fnt, T> {
+    fn decode(buffer: &[u8], parent: &'fnt [u8]) -> Result<Offset16<'fnt, T>> {
         required_len!(buffer, Self::size());
         let offset = u16::decode(buffer)? as usize;
         required_len!(parent, offset);
@@ -199,8 +199,8 @@ impl<'fnt, T> DecodeWith<'fnt, &'fnt [u8]> for Offset16<'fnt, T> {
     }
 }
 
-impl<'fnt, T> DecodeWith<'fnt, &'fnt [u8]> for Offset32<'fnt, T> {
-    fn decode_with(buffer: &[u8], parent: &'fnt [u8]) -> Result<Offset32<'fnt, T>> {
+impl<'fnt, T> Decode1<'fnt, &'fnt [u8]> for Offset32<'fnt, T> {
+    fn decode(buffer: &[u8], parent: &'fnt [u8]) -> Result<Offset32<'fnt, T>> {
         required_len!(buffer, Self::size());
         let offset = u16::decode(buffer)? as usize;
         required_len!(parent, offset);
@@ -250,6 +250,16 @@ impl<T> fmt::Debug for Ignored<T> {
     }
 }
 
+/// A `Discarded<T>` type will parse the type `T` but will neglect
+/// to save this type in the decoded struct.
+pub struct Discarded<T>(pub PhantomData<T>);
+
+impl<T> fmt::Debug for Discarded<T> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "Discarded")
+    }
+}
+
 /// An `Array` data-type which represents a contiguous regoin of encoded `T`.
 /// This type is often used for dynamic array sizes, whose sizes aren't knwon
 /// until they are decoded (often by referencing a length attribute).  As such
@@ -271,8 +281,8 @@ impl<'fnt, T> fmt::Debug for Array<'fnt, T> {
 }
 
 
-impl<'fnt, T> DecodeWith<'fnt, usize> for Array<'fnt, T> {
-    fn decode_with(buffer: &'fnt [u8], param: usize) -> Result<Array<'fnt, T>> {
+impl<'fnt, T> Decode1<'fnt, usize> for Array<'fnt, T> {
+    fn decode(buffer: &'fnt [u8], param: usize) -> Result<Array<'fnt, T>> {
         Ok(Array {
             buffer,
             len: param,

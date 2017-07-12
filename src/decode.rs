@@ -58,25 +58,25 @@ impl<'b: 'fnt, 'fnt> DecodeRead<'fnt> for &'b [u8] {
 
 // TODO: Investigate if P should be an associated type if the ATC RFC merges.
 
-pub trait DecodeWith<'fnt, P>: Sized {
-    fn decode_with(&'fnt [u8], param: P) -> Result<Self>;
+pub trait Decode1<'fnt, P>: Sized {
+    fn decode(&'fnt [u8], param: P) -> Result<Self>;
 }
 
 /// The `DecodeWithRead` trait provides a `Read`-like interface
 /// to decoding a type.  This trait is automatically implemented
 /// for types that implement `DecodeWith` and `StaticSize` automatically.
 
-pub trait DecodeWithRead<'fnt, P>: Sized {
-    fn decode_read_with<T>(&mut self, param: P) -> Result<T>
-        where T: DecodeWith<'fnt, P> + EncodeSize;
+pub trait DecodeRead1<'fnt, P>: Sized {
+    fn decode_read1<T>(&mut self, param: P) -> Result<T>
+        where T: Decode1<'fnt, P> + EncodeSize;
 }
 
-impl<'b: 'fnt, 'fnt, P> DecodeWithRead<'fnt, P> for &'b [u8] {
+impl<'b: 'fnt, 'fnt, P> DecodeRead1<'fnt, P> for &'b [u8] {
     #[inline]
-    fn decode_read_with<T>(&mut self, param: P) -> Result<T>
-        where T: DecodeWith<'fnt, P> + EncodeSize
+    fn decode_read1<T>(&mut self, param: P) -> Result<T>
+        where T: Decode1<'fnt, P> + EncodeSize
     {
-        let ret = T::decode_with(self, param)?;
+        let ret = T::decode(self, param)?;
         *self = &self[ret.encode_size()..];
         Ok(ret)
     }

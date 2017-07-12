@@ -1,6 +1,7 @@
-use primitives::{Tag, Ignored, Array};
-use decode::{StaticEncodeSize, Decode, DecodeRead, DecodeWithRead};
+use primitives::{Tag, Ignored, Array, Discarded};
+use decode::{StaticEncodeSize, EncodeSize, Decode, Decode1, DecodeRead, DecodeRead1};
 use error::{Error, Result};
+use std::marker::PhantomData;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum Version {
@@ -24,19 +25,20 @@ impl<'fnt> Decode<'fnt> for Version {
 }
 
 #[derive(Decode, Debug)]
+// #[DecodeDebug]
 pub struct OffsetTable<'fnt> {
+    __font: Discarded<&'fnt [u8]>,
     sfnt_version: Version,
-    num_tables: u16,
+    num_tables: Discarded<u16>,
     search_range: Ignored<u16>,
     entry_selector: Ignored<u16>,
     range_shift: Ignored<u16>,
     #[WithParam = "num_tables as usize"]
-    tables: Array<'fnt, TableRecord<'fnt>>,
+    tables: Array<'fnt, TableRecord>,
 }
 
 #[derive(Decode, StaticEncodeSize, Debug, PartialEq)]
-pub struct TableRecord<'fnt> {
-    buffer: &'fnt [u8],
+pub struct TableRecord {
     pub tag: Tag,
     pub check_sum: u32,
     pub offset: u32,
@@ -46,7 +48,9 @@ pub struct TableRecord<'fnt> {
 #[test]
 fn try() {
     let data = open_file!("data/DroidSerif.ttf");
-    let font = OffsetTable::decode(&data).expect("failed to read offset table");
+    let font = OffsetTable::decode(&data, &data).expect("failed to read offset table");
+    println!("{:?}", font);
+
     for tbl in font.tables {
         println!("{:?}", tbl);
     }
